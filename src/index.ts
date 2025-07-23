@@ -1,6 +1,3 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 // Types for thinking sessions
@@ -135,470 +132,34 @@ async function handleSequentialThinking(args: any) {
 	};
 }
 
-// Create MCP server
-const server = new Server(
-	{
-		name: "Sequential Thinking Server",
-		version: "1.0.0",
-	},
-	{
-		capabilities: {
-			tools: {},
-		},
-	}
-);
+// Handle MCP protocol
+async function handleMCPRequest(request: any): Promise<any> {
+	const { method, params, id } = request;
 
-// List tools handler
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-	return {
-		tools: [
-			{
-				name: "sequential_thinking",
-				description: "Process sequential thinking steps for complex problem-solving and analysis",
-				inputSchema: {
-					type: "object",
-					properties: {
-						thought: {
-							type: "string",
-							description: "The current thinking step",
-						},
-						nextThoughtNeeded: {
-							type: "boolean",
-							description: "Whether another thought step is needed",
-						},
-						thoughtNumber: {
-							type: "integer",
-							minimum: 1,
-							description: "Current thought number",
-						},
-						totalThoughts: {
-							type: "integer",
-							minimum: 1,
-							description: "Estimated total thoughts needed",
-						},
-						sessionId: {
-							type: "string",
-							description: "Session ID to track thinking process (defaults to 'default')",
-						},
-						isRevision: {
-							type: "boolean",
-							description: "Whether this revises previous thinking",
-						},
-						revisesThought: {
-							type: "integer",
-							description: "Which thought is being reconsidered",
-						},
-						branchFromThought: {
-							type: "integer",
-							description: "Branching point thought number",
-						},
-						branchId: {
-							type: "string",
-							description: "Branch identifier for alternative reasoning paths",
-						},
-					},
-					required: ["thought", "nextThoughtNeeded", "thoughtNumber", "totalThoughts"],
-				},
-			},
-			{
-				name: "get_thinking_session",
-				description: "Retrieve the complete thinking history for a session",
-				inputSchema: {
-					type: "object",
-					properties: {
-						sessionId: {
-							type: "string",
-							description: "Session ID to retrieve",
-						},
-					},
-					required: ["sessionId"],
-				},
-			},
-			{
-				name: "list_thinking_sessions",
-				description: "List all active thinking sessions with their basic information",
-				inputSchema: {
-					type: "object",
-					properties: {},
-				},
-			},
-			{
-				name: "analyze_thinking_patterns",
-				description: "Analyze thinking patterns and provide insights",
-				inputSchema: {
-					type: "object",
-					properties: {
-						sessionId: {
-							type: "string",
-							description: "Specific session to analyze (optional)",
-						},
-					},
-				},
-			},
-			{
-				name: "clear_thinking_sessions",
-				description: "Clear thinking sessions based on criteria",
-				inputSchema: {
-					type: "object",
-					properties: {
-						sessionId: {
-							type: "string",
-							description: "Specific session to clear (optional - if not provided, clears all)",
-						},
-						olderThanHours: {
-							type: "number",
-							description: "Clear sessions older than X hours (optional)",
-						},
-					},
-				},
-			},
-		],
-	};
-});
-
-// Call tool handler
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-	const { name, arguments: args } = request.params;
-
-	switch (name) {
-		case "sequential_thinking": {
-			const {
-				thought,
-				nextThoughtNeeded,
-				thoughtNumber,
-				totalThoughts,
-				sessionId = "default",
-				isRevision = false,
-				revisesThought,
-				branchFromThought,
-				branchId,
-			} = args as any;
-
-			// Get or create thinking session
-			let session = sessions.get(sessionId);
-			if (!session) {
-				session = {
-					sessionId,
-					totalThoughts: 0,
-					currentThought: 0,
-					steps: [],
-					branches: new Map(),
-					created: new Date(),
-					lastUpdated: new Date(),
-					isCompleted: false,
-				};
-				sessions.set(sessionId, session);
-			}
-
-			// Create the thinking step
-			const step: ThinkingStep = {
-				thoughtNumber,
-				thought,
-				timestamp: new Date(),
-				isRevision,
-				revisesThought,
-				branchFromThought,
-				branchId,
-			};
-
-			// Handle branching logic
-			if (branchId && branchFromThought) {
-				let branchSteps = session.branches.get(branchId) || [];
-				branchSteps.push(step);
-				session.branches.set(branchId, branchSteps);
-			} else {
-				session.steps.push(step);
-			}
-
-			// Update session metadata
-			session.currentThought = thoughtNumber;
-			session.totalThoughts = Math.max(session.totalThoughts, totalThoughts);
-			session.lastUpdated = new Date();
-			session.isCompleted = !nextThoughtNeeded;
-
-			// Clean up old sessions to prevent memory buildup
-			cleanupOldSessions();
-
-			// Log for debugging (optional)
-			console.log(`Thought ${thoughtNumber}/${totalThoughts} [${sessionId}]: ${thought.substring(0, 100)}...`);
-
-			// Return comprehensive thinking analysis
-			return {
-				content: [
-					{
-						type: "text",
-						text: JSON.stringify({
-							status: "success",
-							sessionId,
-							currentThought: thoughtNumber,
-							totalThoughts,
-							progressPercentage: Math.round((thoughtNumber / totalThoughts) * 100),
-							isCompleted: !nextThoughtNeeded,
-							sessionSummary: {
-								totalSteps: session.steps.length,
-								branches: session.branches.size,
-								created: session.created,
-								lastUpdated: session.lastUpdated,
-							},
-							nextAction: nextThoughtNeeded 
-								? "Continue with next thinking step" 
-								: "Thinking process completed",
-							thought: {
-								number: thoughtNumber,
-								content: thought,
-								isRevision,
-								revisesThought,
-								branchInfo: branchId ? { branchId, branchFromThought } : null,
-							},
-						}, null, 2),
-					},
-				],
-			};
-		}
-
-		case "get_thinking_session": {
-			const { sessionId } = args as any;
-			const session = sessions.get(sessionId);
-			if (!session) {
+	try {
+		switch (method) {
+			case "initialize": {
 				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify({
-								status: "error",
-								message: `Session ${sessionId} not found`,
-							}, null, 2),
+					jsonrpc: "2.0",
+					id,
+					result: {
+						protocolVersion: "2024-11-05",
+						capabilities: {
+							tools: {},
 						},
-					],
+						serverInfo: {
+							name: "Sequential Thinking Server",
+							version: "1.0.0",
+						},
+					},
 				};
 			}
 
-			return {
-				content: [
-					{
-						type: "text",
-						text: JSON.stringify({
-							status: "success",
-							session: {
-								sessionId: session.sessionId,
-								totalThoughts: session.totalThoughts,
-								currentThought: session.currentThought,
-								isCompleted: session.isCompleted,
-								created: session.created,
-								lastUpdated: session.lastUpdated,
-								steps: session.steps,
-								branches: Object.fromEntries(session.branches),
-							},
-						}, null, 2),
-					},
-				],
-			};
-		}
-
-		case "list_thinking_sessions": {
-			const sessionList = Array.from(sessions.values()).map((session) => ({
-				sessionId: session.sessionId,
-				totalThoughts: session.totalThoughts,
-				currentThought: session.currentThought,
-				isCompleted: session.isCompleted,
-				created: session.created,
-				lastUpdated: session.lastUpdated,
-				stepCount: session.steps.length,
-				branchCount: session.branches.size,
-			}));
-
-			return {
-				content: [
-					{
-						type: "text",
-						text: JSON.stringify({
-							status: "success",
-							totalSessions: sessionList.length,
-							sessions: sessionList,
-						}, null, 2),
-					},
-				],
-			};
-		}
-
-		case "analyze_thinking_patterns": {
-			const { sessionId } = args as any;
-			const sessionsToAnalyze = sessionId 
-				? [sessions.get(sessionId)].filter(Boolean)
-				: Array.from(sessions.values());
-
-			if (sessionsToAnalyze.length === 0) {
+			case "tools/list": {
 				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify({
-								status: "error",
-								message: "No sessions found for analysis",
-							}, null, 2),
-						},
-					],
-				};
-			}
-
-			let totalThoughts = 0;
-			let totalRevisions = 0;
-			let totalBranches = 0;
-			let completedSessions = 0;
-			const thinkingVelocity: number[] = [];
-
-			sessionsToAnalyze.forEach((session) => {
-				if (!session) return;
-				
-				totalThoughts += session.steps.length;
-				totalRevisions += session.steps.filter(step => step.isRevision).length;
-				totalBranches += session.branches.size;
-				if (session.isCompleted) completedSessions++;
-
-				// Calculate thinking velocity (thoughts per minute)
-				if (session.steps.length > 1) {
-					const startTime = session.steps[0].timestamp.getTime();
-					const endTime = session.steps[session.steps.length - 1].timestamp.getTime();
-					const duration = (endTime - startTime) / 60000; // minutes
-					if (duration > 0) {
-						thinkingVelocity.push(session.steps.length / duration);
-					}
-				}
-			});
-
-			const avgVelocity = thinkingVelocity.length > 0 
-				? thinkingVelocity.reduce((a, b) => a + b, 0) / thinkingVelocity.length 
-				: 0;
-
-			return {
-				content: [
-					{
-						type: "text",
-						text: JSON.stringify({
-							status: "success",
-							analysis: {
-								sessionsAnalyzed: sessionsToAnalyze.length,
-								totalThoughts,
-								averageThoughtsPerSession: sessionsToAnalyze.length > 0 ? totalThoughts / sessionsToAnalyze.length : 0,
-								revisionRate: totalThoughts > 0 ? (totalRevisions / totalThoughts) * 100 : 0,
-								branchingFrequency: totalBranches,
-								completionRate: sessionsToAnalyze.length > 0 ? (completedSessions / sessionsToAnalyze.length) * 100 : 0,
-								averageThinkingVelocity: avgVelocity,
-								patterns: {
-									highRevisionSessions: sessionsToAnalyze.filter(s => s && s.steps.filter(step => step.isRevision).length > 0).length,
-									branchedSessions: sessionsToAnalyze.filter(s => s && s.branches.size > 0).length,
-									quickSessions: sessionsToAnalyze.filter(s => s && s.steps.length <= 3).length,
-									deepSessions: sessionsToAnalyze.filter(s => s && s.steps.length > 10).length,
-								},
-							},
-						}, null, 2),
-					},
-				],
-			};
-		}
-
-		case "clear_thinking_sessions": {
-			const { sessionId, olderThanHours } = args as any;
-			
-			if (sessionId) {
-				// Clear specific session
-				const existed = sessions.has(sessionId);
-				sessions.delete(sessionId);
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify({
-								status: "success",
-								message: existed 
-									? `Session ${sessionId} cleared` 
-									: `Session ${sessionId} not found`,
-								cleared: existed ? 1 : 0,
-							}, null, 2),
-						},
-					],
-				};
-			} else if (olderThanHours) {
-				// Clear old sessions
-				const cutoffTime = new Date(Date.now() - olderThanHours * 3600000);
-				let cleared = 0;
-				for (const [sessionId, session] of sessions.entries()) {
-					if (session.lastUpdated < cutoffTime) {
-						sessions.delete(sessionId);
-						cleared++;
-					}
-				}
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify({
-								status: "success",
-								message: `Cleared ${cleared} sessions older than ${olderThanHours} hours`,
-								cleared,
-							}, null, 2),
-						},
-					],
-				};
-			} else {
-				// Clear all sessions
-				const cleared = sessions.size;
-				sessions.clear();
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify({
-								status: "success",
-								message: `Cleared all ${cleared} sessions`,
-								cleared,
-							}, null, 2),
-						},
-					],
-				};
-			}
-		}
-
-		default:
-			throw new Error(`Unknown tool: ${name}`);
-	}
-});
-
-// Handle Server-Sent Events for remote MCP clients
-async function handleSSE(request: Request): Promise<Response> {
-	const { readable, writable } = new TransformStream();
-	const writer = writable.getWriter();
-	const encoder = new TextEncoder();
-
-	// Set up SSE headers
-	const headers = new Headers({
-		'Content-Type': 'text/event-stream',
-		'Cache-Control': 'no-cache',
-		'Connection': 'keep-alive',
-		'Access-Control-Allow-Origin': '*',
-		'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-		'Access-Control-Allow-Headers': 'Content-Type',
-	});
-
-	// Handle OPTIONS for CORS
-	if (request.method === 'OPTIONS') {
-		return new Response(null, { status: 200, headers });
-	}
-
-	// Start the SSE connection
-	writer.write(encoder.encode('data: {"type":"connection","status":"connected"}\n\n'));
-
-			// Handle MCP protocol over SSE
-		if (request.method === 'POST') {
-			let mcpRequest: any = null;
-			try {
-				const body = await request.text();
-				mcpRequest = JSON.parse(body);
-				
-				// Process the MCP request manually
-				let result;
-				if (mcpRequest.method === 'tools/list') {
-					result = {
+					jsonrpc: "2.0",
+					id,
+					result: {
 						tools: [
 							{
 								name: "sequential_thinking",
@@ -606,65 +167,185 @@ async function handleSSE(request: Request): Promise<Response> {
 								inputSchema: {
 									type: "object",
 									properties: {
-										thought: { type: "string", description: "The current thinking step" },
-										nextThoughtNeeded: { type: "boolean", description: "Whether another thought step is needed" },
-										thoughtNumber: { type: "integer", minimum: 1, description: "Current thought number" },
-										totalThoughts: { type: "integer", minimum: 1, description: "Estimated total thoughts needed" },
-										sessionId: { type: "string", description: "Session ID to track thinking process (defaults to 'default')" },
-										isRevision: { type: "boolean", description: "Whether this revises previous thinking" },
-										revisesThought: { type: "integer", description: "Which thought is being reconsidered" },
-										branchFromThought: { type: "integer", description: "Branching point thought number" },
-										branchId: { type: "string", description: "Branch identifier for alternative reasoning paths" },
+										thought: {
+											type: "string",
+											description: "The current thinking step",
+										},
+										nextThoughtNeeded: {
+											type: "boolean",
+											description: "Whether another thought step is needed",
+										},
+										thoughtNumber: {
+											type: "integer",
+											minimum: 1,
+											description: "Current thought number",
+										},
+										totalThoughts: {
+											type: "integer",
+											minimum: 1,
+											description: "Estimated total thoughts needed",
+										},
+										sessionId: {
+											type: "string",
+											description: "Session ID to track thinking process (defaults to 'default')",
+										},
+										isRevision: {
+											type: "boolean",
+											description: "Whether this revises previous thinking",
+										},
+										revisesThought: {
+											type: "integer",
+											description: "Which thought is being reconsidered",
+										},
+										branchFromThought: {
+											type: "integer",
+											description: "Branching point thought number",
+										},
+										branchId: {
+											type: "string",
+											description: "Branch identifier for alternative reasoning paths",
+										},
 									},
 									required: ["thought", "nextThoughtNeeded", "thoughtNumber", "totalThoughts"],
 								},
 							},
 						],
-					};
-				} else if (mcpRequest.method === 'tools/call') {
-					// Handle tool calls directly
-					const { name, arguments: args } = mcpRequest.params;
-					if (name === 'sequential_thinking') {
-						result = await handleSequentialThinking(args);
-					} else {
-						throw new Error(`Unknown tool: ${name}`);
-					}
-				} else {
-					throw new Error(`Method not found: ${mcpRequest.method}`);
-				}
-				
-				// Send the response
-				const responseData = JSON.stringify({
-					jsonrpc: '2.0',
-					id: mcpRequest.id,
-					result,
-				});
-				writer.write(encoder.encode(`data: ${responseData}\n\n`));
-			} catch (error) {
-				const errorResponse = {
-					jsonrpc: '2.0',
-					id: mcpRequest?.id || null,
-					error: {
-						code: -32000,
-						message: error instanceof Error ? error.message : 'Unknown error',
 					},
 				};
-				writer.write(encoder.encode(`data: ${JSON.stringify(errorResponse)}\n\n`));
 			}
+
+			case "tools/call": {
+				const { name, arguments: args } = params;
+				if (name === "sequential_thinking") {
+					const result = await handleSequentialThinking(args);
+					return {
+						jsonrpc: "2.0",
+						id,
+						result,
+					};
+				} else {
+					throw new Error(`Unknown tool: ${name}`);
+				}
+			}
+
+			default:
+				throw new Error(`Unknown method: ${method}`);
 		}
+	} catch (error) {
+		return {
+			jsonrpc: "2.0",
+			id,
+			error: {
+				code: -32000,
+				message: error instanceof Error ? error.message : "Unknown error",
+			},
+		};
+	}
+}
 
-	// Keep connection alive
-	const keepAlive = setInterval(() => {
-		writer.write(encoder.encode('data: {"type":"ping"}\n\n'));
-	}, 30000);
+// Handle Server-Sent Events for remote MCP clients
+async function handleSSE(request: Request): Promise<Response> {
+	const url = new URL(request.url);
+	
+	// Handle CORS preflight
+	if (request.method === 'OPTIONS') {
+		return new Response(null, {
+			status: 200,
+			headers: {
+				'Access-Control-Allow-Origin': '*',
+				'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+				'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+				'Access-Control-Max-Age': '86400',
+			},
+		});
+	}
 
-	// Cleanup on disconnect
-	request.signal?.addEventListener('abort', () => {
-		clearInterval(keepAlive);
-		writer.close();
+	// Set up SSE response
+	const { readable, writable } = new TransformStream();
+	const writer = writable.getWriter();
+	const encoder = new TextEncoder();
+
+	const headers = new Headers({
+		'Content-Type': 'text/event-stream',
+		'Cache-Control': 'no-cache',
+		'Connection': 'keep-alive',
+		'Access-Control-Allow-Origin': '*',
+		'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+		'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 	});
 
-	return new Response(readable, { headers });
+	// For GET requests, just send keep-alive
+	if (request.method === 'GET') {
+		// Send initial connection message
+		writer.write(encoder.encode('data: {"type":"connection","status":"connected"}\n\n'));
+		
+		// Keep connection alive with periodic pings
+		const keepAlive = setInterval(() => {
+			try {
+				writer.write(encoder.encode('data: {"type":"ping"}\n\n'));
+			} catch (error) {
+				clearInterval(keepAlive);
+			}
+		}, 30000);
+
+		// Handle connection close
+		request.signal?.addEventListener('abort', () => {
+			clearInterval(keepAlive);
+			try {
+				writer.close();
+			} catch (e) {
+				// Connection already closed
+			}
+		});
+
+		return new Response(readable, { headers });
+	}
+
+	// For POST requests, handle MCP protocol
+	if (request.method === 'POST') {
+		try {
+			const body = await request.text();
+			const mcpRequest = JSON.parse(body);
+			
+			// Process the MCP request
+			const response = await handleMCPRequest(mcpRequest);
+			
+			// Send the response as SSE
+			const responseData = JSON.stringify(response);
+			writer.write(encoder.encode(`data: ${responseData}\n\n`));
+			
+			// Close after sending response
+			setTimeout(() => {
+				try {
+					writer.close();
+				} catch (e) {
+					// Connection already closed
+				}
+			}, 100);
+			
+		} catch (error) {
+			const errorResponse = {
+				jsonrpc: "2.0",
+				id: null,
+				error: {
+					code: -32700,
+					message: error instanceof Error ? error.message : "Parse error",
+				},
+			};
+			writer.write(encoder.encode(`data: ${JSON.stringify(errorResponse)}\n\n`));
+			setTimeout(() => {
+				try {
+					writer.close();
+				} catch (e) {
+					// Connection already closed
+				}
+			}, 100);
+		}
+
+		return new Response(readable, { headers });
+	}
+
+	return new Response('Method not allowed', { status: 405 });
 }
 
 // Export default function for Cloudflare Workers
@@ -685,7 +366,7 @@ export default {
 			});
 		}
 
-		// SSE endpoint for MCP clients
+		// SSE endpoints for MCP clients
 		if (url.pathname === '/sse' || url.pathname === '/') {
 			return handleSSE(request);
 		}
@@ -708,7 +389,7 @@ Add this to your Claude Desktop configuration:
   "mcpServers": {
     "sequential-thinking": {
       "command": "npx",
-      "args": ["@modelcontextprotocol/server-remote", "${url.origin}/"]
+      "args": ["mcp-remote", "${url.origin}/sse"]
     }
   }
 }
@@ -716,10 +397,6 @@ Add this to your Claude Desktop configuration:
 
 ## Available Tools:
 - **sequential_thinking** - Process reasoning steps
-- **get_thinking_session** - Retrieve session history  
-- **list_thinking_sessions** - List all sessions
-- **analyze_thinking_patterns** - Analyze thinking patterns
-- **clear_thinking_sessions** - Clear sessions
 
 Visit: ${url.origin}/health for health status
 			`, {
