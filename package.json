@@ -1,6 +1,7 @@
 {
-	"name": "remote-mcp-server-authless",
-	"version": "0.0.0",
+	"name": "sequential-thinking-mcp-server",
+	"version": "1.0.0",
+	"description": "Sequential Thinking MCP Server - Facilitates structured, step-by-step problem-solving and analysis workflows",
 	"private": true,
 	"scripts": {
 		"deploy": "wrangler deploy",
