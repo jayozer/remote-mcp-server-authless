@@ -1,9 +1,9 @@
 import { handleSSE } from './shared/sse-handler.js';
 import { createHealthResponse, createInfoResponse } from './shared/mcp-protocol.js';
-import { sequentialThinkingConfig, getAdditionalInfo as getSTInfo } from './sequential-thinking/index.js';
-// Import other server configs as we create them
-// import { playwrightConfig, getAdditionalInfo as getPWInfo } from './playwright/index.js';
-// import { browserUseConfig, getAdditionalInfo as getBUInfo } from './browser-use/index.js';
+import { sequentialThinkingConfig, getAdditionalInfo as getSTInfo, getHealthInfo as getSTHealth } from './sequential-thinking/index.js';
+import { playwrightConfig, getAdditionalInfo as getPWInfo, getHealthInfo as getPWHealth } from './playwright/index.js';
+// Import browser-use server config when created
+// import { browserUseConfig, getAdditionalInfo as getBUInfo, getHealthInfo as getBUHealth } from './browser-use/index.js';
 
 /**
  * Multi-server MCP routing system
@@ -17,114 +17,82 @@ export default {
     
     switch (serverType) {
       case 'sequential-thinking':
-        return handleSequentialThinkingServer(request, url, env);
+        return handleServerRequest(request, sequentialThinkingConfig, getSTHealth, getSTInfo(), env);
       
       case 'playwright':
-        return handlePlaywrightServer(request, url, env);
+        return handleServerRequest(request, playwrightConfig, getPWHealth, getPWInfo(), env);
       
-      case 'browser-use':
-        return handleBrowserUseServer(request, url, env);
-        
+      // case 'browser-use':
+      //   return handleServerRequest(request, browserUseConfig, getBUHealth, getBUInfo(), env);
+      
       default:
-        return new Response('Unknown server type', { status: 404 });
+        // Default to sequential thinking for backward compatibility
+        return handleServerRequest(request, sequentialThinkingConfig, getSTHealth, getSTInfo(), env);
     }
-  },
+  }
 };
 
 /**
- * Determine server type based on URL or environment
+ * Determine server type based on URL patterns
  */
 function getServerType(url: URL): string {
-  // For development, use URL path to determine server type
-  if (url.pathname.startsWith('/playwright')) {
-    return 'playwright';
-  }
-  if (url.pathname.startsWith('/browser-use')) {
-    return 'browser-use';
-  }
-  
-  // For production, use hostname to determine server type
   const hostname = url.hostname;
-  if (hostname.includes('playwright')) {
+  
+  // Map hostnames to server types
+  if (hostname.includes('playwright-mcp-server') || hostname.includes('playwright')) {
     return 'playwright';
   }
-  if (hostname.includes('browser-use')) {
+  if (hostname.includes('browser-use-mcp-server') || hostname.includes('browser-use')) {
     return 'browser-use';
   }
+  if (hostname.includes('remote-mcp-server-authless') || hostname.includes('sequential-thinking')) {
+    return 'sequential-thinking';
+  }
   
-  // Default to sequential thinking for main domain
+  // Default to sequential thinking
   return 'sequential-thinking';
 }
 
 /**
- * Handle Sequential Thinking MCP Server requests
+ * Handle requests for a specific MCP server
  */
-async function handleSequentialThinkingServer(
+async function handleServerRequest(
   request: Request, 
-  url: URL, 
+  config: any, 
+  getHealthInfo: () => Record<string, any>,
+  additionalInfo: string,
   env: any
 ): Promise<Response> {
-  // Health check endpoint
-  if (url.pathname === '/health') {
-    return createHealthResponse(
-      sequentialThinkingConfig.info.name,
-      sequentialThinkingConfig.info.version,
-      getSTInfo()
-    );
+  const url = new URL(request.url);
+  const pathname = url.pathname;
+
+  // Route to different endpoints
+  switch (pathname) {
+    case '/':
+      return new Response(`Welcome to ${config.info.name}!\n\nAvailable endpoints:\n- GET /health - Health check\n- GET /info - Server information\n- GET /sse - MCP protocol endpoint\n- POST /sse - MCP tool execution\n\n${additionalInfo}`, {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain' }
+      });
+
+    case '/health':
+      return createHealthResponse(config.info.name, config.info.version, getHealthInfo());
+
+    case '/info':
+      return createInfoResponse(
+        config.info.name, 
+        config.info.version, 
+        url, 
+        config.tools.map((t: any) => t.name),
+        additionalInfo
+      );
+
+    case '/sse':
+      return handleSSE(request, config, env);
+
+    default:
+      return new Response(`Not Found\n\nServer: ${config.info.name}\nEndpoint not found: ${pathname}`, {
+        status: 404,
+        headers: { 'Content-Type': 'text/plain' }
+      });
   }
-
-  // SSE endpoints for MCP clients
-  if (url.pathname === '/sse' || url.pathname === '/') {
-    return handleSSE(request, sequentialThinkingConfig, env);
-  }
-
-  // Information endpoint
-  if (url.pathname === '/info') {
-    return createInfoResponse(
-      sequentialThinkingConfig.info.name,
-      sequentialThinkingConfig.info.version,
-      url,
-      sequentialThinkingConfig.tools.map(t => t.name)
-    );
-  }
-
-  return new Response('Not found', { status: 404 });
-}
-
-/**
- * Handle Playwright MCP Server requests (placeholder for now)
- */
-async function handlePlaywrightServer(
-  request: Request, 
-  url: URL, 
-  env: any
-): Promise<Response> {
-  // TODO: Implement Playwright server
-  return new Response(JSON.stringify({
-    status: 'coming_soon',
-    service: 'Playwright MCP Server',
-    message: 'Playwright server is under development',
-    timestamp: new Date().toISOString(),
-  }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-/**
- * Handle Browser-use MCP Server requests (placeholder for now)
- */
-async function handleBrowserUseServer(
-  request: Request, 
-  url: URL, 
-  env: any
-): Promise<Response> {
-  // TODO: Implement Browser-use server
-  return new Response(JSON.stringify({
-    status: 'coming_soon',
-    service: 'Browser-use MCP Server',
-    message: 'Browser-use server is under development',
-    timestamp: new Date().toISOString(),
-  }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
 }

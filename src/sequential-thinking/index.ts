@@ -195,8 +195,25 @@ export const sequentialThinkingConfig: ServerConfig = {
 };
 
 // Additional info for the server
-export function getAdditionalInfo(): Record<string, any> {
+export function getAdditionalInfo(): string {
+  return `
+🧠 **Sequential Thinking MCP Server Status**
+
+**Active Sessions:** ${sessions.size}
+**Session Timeout:** ${SESSION_TIMEOUT / 60000} minutes
+**Features:** Session management, thought branching, revision tracking
+
+**Available Tools:**
+- sequential_thinking: Process sequential thinking steps for complex problem-solving
+
+**Usage:** Send thinking steps with session management for organized reasoning processes.
+`;
+}
+
+// Helper function to get health info for JSON responses
+export function getHealthInfo(): Record<string, any> {
+  cleanupOldSessions();
   return {
-    sessionsCount: sessions.size,
+    sessionsCount: sessions.size
   };
 } 
