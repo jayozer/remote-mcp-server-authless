@@ -1,25 +1,38 @@
 {
-	"name": "sequential-thinking-mcp-server",
+	"name": "remote-mcp-servers-multi",
 	"version": "1.0.0",
-	"description": "Sequential Thinking MCP Server - Facilitates structured, step-by-step problem-solving and analysis workflows",
-	"private": true,
+	"description": "Multi-server MCP implementation with Sequential Thinking, Playwright, and Browser-use servers",
+	"main": "src/index.ts",
 	"scripts": {
 		"deploy": "wrangler deploy",
+		"deploy:sequential-thinking": "wrangler deploy --env sequential-thinking",
+		"deploy:playwright": "wrangler deploy --env playwright",
+		"deploy:browser-use": "wrangler deploy --env browser-use",
+		"deploy:all": "npm run deploy:sequential-thinking && npm run deploy:playwright && npm run deploy:browser-use",
 		"dev": "wrangler dev",
-		"format": "biome format --write",
-		"lint:fix": "biome lint --fix",
-		"start": "wrangler dev",
-		"cf-typegen": "wrangler types",
-		"type-check": "tsc --noEmit"
+		"dev:sequential-thinking": "wrangler dev --env sequential-thinking",
+		"dev:playwright": "wrangler dev --env playwright",
+		"dev:browser-use": "wrangler dev --env browser-use",
+		"test": "echo \"No tests yet\" && exit 0"
 	},
 	"dependencies": {
-		"@modelcontextprotocol/sdk": "1.13.1",
-		"agents": "^0.0.100",
-		"zod": "^3.25.67"
+		"zod": "^3.22.4"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.0.6",
-		"typescript": "^5.8.3",
-		"wrangler": "^4.22.0"
-	}
+		"@cloudflare/workers-types": "^4.20241205.0",
+		"@types/node": "^20.0.0",
+		"typescript": "^5.0.0",
+		"wrangler": "^3.95.0"
+	},
+	"keywords": [
+		"cloudflare",
+		"workers",
+		"mcp",
+		"model-context-protocol",
+		"playwright",
+		"browser-automation",
+		"ai-agents"
+	],
+	"author": "Jay Ozer",
+	"license": "MIT"
 }

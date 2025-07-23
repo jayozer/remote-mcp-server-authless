@@ -4,17 +4,41 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "remote-mcp-server-authless",
+	"name": "remote-mcp-servers",
 	"main": "src/index.ts",
-	"compatibility_date": "2025-03-10",
-	"compatibility_flags": ["nodejs_compat"],
+	"compatibility_date": "2024-11-05",
+	"compatibility_flags": ["nodejs_compat_v2"],
+	"build": {
+		"command": ""
+	},
 	"migrations": [
 		{
-			"tag": "v4",
-			"deleted_classes": ["SequentialThinkingMCP"]
+			"tag": "v1",
+			"new_sqlite_classes": []
 		}
 	],
 	"observability": {
 		"enabled": true
+	},
+
+	// Environment configurations for different servers
+	"env": {
+		"sequential-thinking": {
+			"name": "remote-mcp-server-authless"
+		},
+
+		"playwright": {
+			"name": "playwright-mcp-server",
+			"browser": {
+				"binding": "MYBROWSER"
+			}
+		},
+
+		"browser-use": {
+			"name": "browser-use-mcp-server",
+			"browser": {
+				"binding": "MYBROWSER"
+			}
+		}
 	}
 }
