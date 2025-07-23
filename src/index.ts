@@ -2,8 +2,7 @@ import { handleSSE } from './shared/sse-handler.js';
 import { createHealthResponse, createInfoResponse } from './shared/mcp-protocol.js';
 import { sequentialThinkingConfig, getAdditionalInfo as getSTInfo, getHealthInfo as getSTHealth } from './sequential-thinking/index.js';
 import { playwrightConfig, getAdditionalInfo as getPWInfo, getHealthInfo as getPWHealth } from './playwright/index.js';
-// Import browser-use server config when created
-// import { browserUseConfig, getAdditionalInfo as getBUInfo, getHealthInfo as getBUHealth } from './browser-use/index.js';
+import { browserUseConfig, getAdditionalInfo as getBUInfo, getHealthInfo as getBUHealth } from './browser-use/index.js';
 
 /**
  * Multi-server MCP routing system
@@ -22,8 +21,8 @@ export default {
       case 'playwright':
         return handleServerRequest(request, playwrightConfig, getPWHealth, getPWInfo(), env);
       
-      // case 'browser-use':
-      //   return handleServerRequest(request, browserUseConfig, getBUHealth, getBUInfo(), env);
+      case 'browser-use':
+        return handleServerRequest(request, browserUseConfig, getBUHealth, getBUInfo(), env);
       
       default:
         // Default to sequential thinking for backward compatibility
